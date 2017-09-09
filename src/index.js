@@ -3,6 +3,8 @@ const isWebpackBundle = require('is-webpack-bundle');
 const webpackRequireWeak = require('webpack-require-weak');
 const {inspect} = require('import-inspector');
 
+let renderedMetadata = [];
+
 function capture(fn) {
   let reported = [];
   let stopInspecting = inspect(metadata => reported.push(metadata));
@@ -21,23 +23,22 @@ function load(loader) {
   }
 
   let state = {
+    metadata: reported[0] || {},
     loading: true,
     loaded: null,
     error: null
   };
 
-  let metadata = reported[0] || {};
-
   try {
     if (isWebpackBundle) {
-      if (typeof metadata.webpackRequireWeakId === 'function') {
-        state.loaded = webpackRequireWeak(metadata.webpackRequireWeakId());
+      if (typeof state.metadata.webpackRequireWeakId === 'function') {
+        state.loaded = webpackRequireWeak(state.metadata.webpackRequireWeakId());
         if (state.loaded) state.loading = false;
       }
     } else {
-      if (typeof metadata.serverSideRequirePath === 'string') {
+      if (typeof state.metadata.serverSideRequirePath === 'string') {
         state.loading = false;
-        state.loaded = module.require(metadata.serverSideRequirePath);
+        state.loaded = module.require(state.metadata.serverSideRequirePath);
       }
     }
   } catch (err) {
@@ -149,7 +150,7 @@ function createLoadableComponent(loadFn, options) {
     componentWillMount() {
       this._mounted = true;
 
-      if (res.resolved) {
+      if (!res.loading) {
         return;
       }
 
@@ -198,6 +199,10 @@ function createLoadableComponent(loadFn, options) {
     }
 
     render() {
+      if (typeof window === 'undefined' && res.metadata) {
+        renderedMetadata.push(res.metadata);
+      }
+
       if (this.state.loading || this.state.error) {
         return React.createElement(opts.loading, {
           isLoading: this.state.loading,
@@ -226,6 +231,13 @@ function LoadableMap(opts) {
   return createLoadableComponent(loadMap, opts);
 }
 
+function flushRenderedMetadata() {
+  let _renderedMetadata = renderedMetadata;
+  renderedMetadata = [];
+  return _renderedMetadata;
+}
+
 Loadable.Map = LoadableMap;
+Loadable.flushRenderedMetadata = flushRenderedMetadata;
 
 module.exports = Loadable;
