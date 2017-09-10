@@ -43,6 +43,7 @@ function load(loader) {
     }
   } catch (err) {
     state.error = err;
+    throw err;
   }
 
   state.promise = promise.then(loaded => {
